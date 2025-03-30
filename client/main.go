@@ -1,10 +1,31 @@
 package main
 
 import (
-	"assignment-2/helper"
+	// "assignment-2/helper"
+	"encoding/binary"
 	"fmt"
+	"io"
+	"log"
 	"net"
+	"os"
 )
+
+
+func saveImageToFile(imageBytes []byte, filename string) {
+	file, err := os.Create(filename)
+	if err != nil {
+		log.Fatal("Error creating file: ", err)
+	}
+	defer file.Close()
+
+	// Write the image bytes to the file
+	_, err = file.Write(imageBytes)
+	if err != nil {
+		log.Fatal("Error writing image to file: ", err)
+	}
+
+	fmt.Println("Image saved successfully to", filename)
+}
 
 func main() {
 	hostAddress := "localhost:3000"
@@ -15,19 +36,48 @@ func main() {
 		fmt.Println("Error: ", err)
 		return
 	}
+
+	// Reading image size
+	headerBytes := make([]byte, 4)
+	conn.Read(headerBytes)
+	fmt.Println("Received Header:", headerBytes)
+	imgByteLength := uint32(binary.BigEndian.Uint32(headerBytes))
+	fmt.Println(imgByteLength)
 	chunk := make([]byte, 1024)
-	for {
+
+
+	var fullMessage []byte
+
+	for uint32(len(fullMessage)) < uint32(imgByteLength) {
+		remaining := imgByteLength - uint32(len(fullMessage))
+		
+		currentChunkSize := uint32(len(chunk))
+		if currentChunkSize > remaining {
+			currentChunkSize = remaining
+		}
+
+		chunk := make([]byte, currentChunkSize)
 		n, err:= conn.Read(chunk)
 		if err != nil {
-			helper.ColorPrintln("red", "Error occured while sending from server to client")
-			return
+			if err == io.EOF && uint32(len(fullMessage)) == imgByteLength {
+				break
+			}
+			fmt.Println("Error reading chuck: ", err)
+			break
 		}
-		tftp, err := DeserializeTFTPRRQ(chunk[:n])
-		if err != nil {
-			fmt.Println("Error: ", err)
-			return	
-		}
-		fmt.Println(string(chunk[:n]))
-		fmt.Println(tftp.Filename, ", ", tftp.Mode, ", ", tftp.Opcode)
+
+		fullMessage = append(fullMessage, chunk[:n]...)
 	}
+
+	fmt.Println(len(fullMessage))
+
+	saveImageToFile(fullMessage, "test_corgi.jpg")
+
+	// tftp, err := DeserializeTFTPRRQ(chunk[:n])
+	// if err != nil {
+	// 	fmt.Println("Error: ", err)
+	// 	return
+	// }
+	// fmt.Println(string(chunk[:n]))
+	// fmt.Println(tftp.Filename, ", ", tftp.Mode, ", ", tftp.Opcode)
 }
