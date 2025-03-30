@@ -1,6 +1,7 @@
 package main
 
 import (
+	"assignment-2/helper"
 	"fmt"
 	"net"
 	"time"
@@ -10,7 +11,6 @@ type Message struct {
 	From    string
 	Payload []byte
 }
-
 
 // The server is for creating a new server that include the port that is going to listen ln I believe is the listener and quitch which is
 type Server struct {
@@ -68,12 +68,17 @@ func (s *Server) readLoop(conn net.Conn) {
 		// 	fmt.Println("read error: ", err)
 		// 	continue
 		// }
-		s.Msgch <- Message {
-			From: conn.RemoteAddr().String(),
+		s.Msgch <- Message{
+			From:    conn.RemoteAddr().String(),
 			Payload: []byte("This is dummy text"),
 		}
 
-		conn.Write([]byte("Thank you"))
+		tftpRRQPacket, err := CreateRRQPacket()
+		if err != nil {
+			helper.ColorPrintln("red", "Error occured: "+err.Error())
+			return
+		}
+		conn.Write(tftpRRQPacket)
 
 		time.Sleep(2 * time.Second)
 	}

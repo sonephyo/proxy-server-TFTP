@@ -1,6 +1,7 @@
 package main
 
 import (
+	"assignment-2/helper"
 	"fmt"
 	"net"
 )
@@ -15,5 +16,18 @@ func main() {
 		return
 	}
 	chunk := make([]byte, 1024)
-	n, err:= conn.Read(chunk)
+	for {
+		n, err:= conn.Read(chunk)
+		if err != nil {
+			helper.ColorPrintln("red", "Error occured while sending from server to client")
+			return
+		}
+		tftp, err := DeserializeTFTPRRQ(chunk[:n])
+		if err != nil {
+			fmt.Println("Error: ", err)
+			return	
+		}
+		fmt.Println(string(chunk[:n]))
+		fmt.Println(tftp.Filename, ", ", tftp.Mode, ", ", tftp.Opcode)
+	}
 }

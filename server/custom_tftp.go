@@ -1,13 +1,31 @@
 package main
 
-// import "bytes"
+import (
+	"assignment-2/helper"
+	"fmt"
+)
 
+type tftpRRQPacket struct {
+	Opcode uint16
+	Filename string
+	Mode string
+}
 
+func CreateRRQPacket() ([]byte, error) {
 
-func CreatePacket() {
-	// var magic uint = 0xABCD
+	request := tftpRRQPacket {
+		Opcode: 1,
+		Filename: "test.txt",
+		Mode: "octet",
+	}
 
-	// buf := new(bytes.Buffer)
-
-	// buf.Write()
+	data, err :=  request.SerializeTFTP()
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return nil, err
+	}
+	
+	helper.ColorPrintln("green", "Serialized TFTP RRQ Request: " + string(data))
+	fmt.Printf("Hex Dump: % x\n", data)
+	return data, nil
 }
