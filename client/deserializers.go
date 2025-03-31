@@ -6,12 +6,6 @@ import (
 	"fmt"
 )
 
-type tftpRRQPacket struct {
-	Opcode   uint16
-	Filename string
-	Mode     string
-}
-
 func DeserializeTFTPRRQ(data []byte) (*tftpRRQPacket, error) {
 	if len(data) < 4 {
 		return nil, fmt.Errorf("invalid TFTP RRQ packet: too short")
@@ -31,5 +25,25 @@ func DeserializeTFTPRRQ(data []byte) (*tftpRRQPacket, error) {
 		Opcode:   opCode,
 		Filename: filename,
 		Mode:     mode,
+	}, nil
+}
+
+func DeserializeTFTPDATA(data []byte) (*tftpDATAPacket, error) {
+	if len(data) < 4 {
+		return nil, fmt.Errorf("invalid TFTP DATA packet: too short")
+	}
+
+	opCode := binary.BigEndian.Uint16(data[:2])
+	data = data[2:]
+
+	block := binary.BigEndian.Uint16(data[:2])
+	data = data[2:]
+
+	packetData := data[:]
+
+	return &tftpDATAPacket{
+		Opcode: opCode,
+		Block: block,
+		Data: []byte(packetData),
 	}, nil
 }
