@@ -5,8 +5,7 @@ import (
 	"encoding/binary"
 )
 
-
-func (req *tftpRRQPacket) SerializeTFTP() ([]byte, error) {
+func (req *tftpRRQPacket) SerializeTFTPRRQ() ([]byte, error) {
 	buf := new(bytes.Buffer)
 
 	if err := binary.Write(buf, binary.BigEndian, req.Opcode); err != nil {

@@ -6,26 +6,26 @@ import (
 )
 
 type tftpRRQPacket struct {
-	Opcode uint16
+	Opcode   uint16
 	Filename string
-	Mode string
+	Mode     string
 }
 
 func CreateRRQPacket() ([]byte, error) {
 
-	request := tftpRRQPacket {
-		Opcode: 1,
+	request := tftpRRQPacket{
+		Opcode:   1,
 		Filename: "test.txt",
-		Mode: "octet",
+		Mode:     "octet",
 	}
 
-	data, err :=  request.SerializeTFTP()
+	data, err := request.SerializeTFTPRRQ()
 	if err != nil {
 		fmt.Println("Error: ", err)
 		return nil, err
 	}
-	
-	helper.ColorPrintln("green", "Serialized TFTP RRQ Request: " + string(data))
+
+	helper.ColorPrintln("green", "Serialized TFTP RRQ Request: "+string(data))
 	fmt.Printf("Hex Dump: % x\n", data)
 	return data, nil
 }

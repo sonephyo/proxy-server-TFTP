@@ -66,8 +66,7 @@ func (s *Server) acceptLoop() {
 	}
 }
 
-func getImageFromURL() []byte {
-	url := "https://static.boredpanda.com/blog/wp-content/uploads/2020/07/funny-expressive-dog-corgi-genthecorgi-1-1-5f0ea719ea38a__700.jpg"
+func getImageFromURL(url string) []byte {
 	response, e := http.Get(url)
 	fmt.Println("Response Status code: ", response.StatusCode)
 	if e != nil {
@@ -86,18 +85,17 @@ func getImageFromURL() []byte {
 
 func (s *Server) readLoop(conn net.Conn) {
 	defer conn.Close()
-	// buf := make([]byte, 2048)
+	buf := make([]byte, 2048)
 	for {
-		// n, err := conn.Read(buf)
-		// if err != nil {
-		// 	fmt.Println("read error: ", err)
-		// 	continue
-		// }
-		// s.Msgch <- Message{
-		// 	From:    conn.RemoteAddr().String(),
-		// 	Payload: []byte("This is dummy text"),
-		// }
+		n, err := conn.Read(buf)
+		if err != nil {
+			fmt.Println("read error: ", err)
+			continue
+		}
 
+		imgURL := string(buf[:n])
+		
+		print(imgURL)
 		// tftpRRQPacket, err := CreateRRQPacket()
 		// if err != nil {
 		// 	helper.ColorPrintln("red", "Error occured: "+err.Error())
@@ -109,13 +107,13 @@ func (s *Server) readLoop(conn net.Conn) {
 		// err := jpeg.Encode(buf, new_image, nil)
 		// send_s3 := buf.Bytes()
 
-		imageBytes := getImageFromURL()
+		imageBytes := getImageFromURL(imgURL)
 
 		imageSize := len(imageBytes)
 		buf := new(bytes.Buffer)
-		err := binary.Write(buf, binary.BigEndian, int32(imageSize))
+		err = binary.Write(buf, binary.BigEndian, int32(imageSize))
 		if err != nil {
-			helper.ColorPrintln("red", "Something went wrong: " + err.Error())
+			helper.ColorPrintln("red", "Something went wrong: "+err.Error())
 			return
 		}
 

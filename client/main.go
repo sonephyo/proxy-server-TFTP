@@ -10,7 +10,6 @@ import (
 	"os"
 )
 
-
 func saveImageToFile(imageBytes []byte, filename string) {
 	file, err := os.Create(filename)
 	if err != nil {
@@ -27,16 +26,15 @@ func saveImageToFile(imageBytes []byte, filename string) {
 	fmt.Println("Image saved successfully to", filename)
 }
 
-func main() {
-	hostAddress := "localhost:3000"
-
-	// Creating connection with the server
-	conn, err := net.Dial("tcp", hostAddress)
+func sendImageURLTOServer(conn net.Conn, imgURL string) error {
+	_, err := conn.Write([]byte(imgURL))
 	if err != nil {
-		fmt.Println("Error: ", err)
-		return
+		return err
 	}
+	return nil
+}
 
+func ReadImagePacket(conn net.Conn) ([]byte, error) {
 	// Reading image size
 	headerBytes := make([]byte, 4)
 	conn.Read(headerBytes)
@@ -45,33 +43,52 @@ func main() {
 	fmt.Println(imgByteLength)
 	chunk := make([]byte, 1024)
 
-
 	var fullMessage []byte
-
+	
 	for uint32(len(fullMessage)) < uint32(imgByteLength) {
 		remaining := imgByteLength - uint32(len(fullMessage))
-		
+
 		currentChunkSize := uint32(len(chunk))
 		if currentChunkSize > remaining {
 			currentChunkSize = remaining
 		}
 
 		chunk := make([]byte, currentChunkSize)
-		n, err:= conn.Read(chunk)
+		n, err := conn.Read(chunk)
 		if err != nil {
 			if err == io.EOF && uint32(len(fullMessage)) == imgByteLength {
-				break
+				return nil, err
 			}
 			fmt.Println("Error reading chuck: ", err)
-			break
+			return nil, err
 		}
 
 		fullMessage = append(fullMessage, chunk[:n]...)
 	}
-
+	
 	fmt.Println(len(fullMessage))
+	return fullMessage, nil
+}
 
-	saveImageToFile(fullMessage, "test_corgi.jpg")
+func main() {
+	hostAddress := "localhost:3000"
+	imgURL := "https://static.boredpanda.com/blog/wp-content/uploads/2020/07/funny-expressive-dog-corgi-genthecorgi-1-1-5f0ea719ea38a__700.jpg"
+
+	// Creating connection with the server
+	conn, err := net.Dial("tcp", hostAddress)
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return
+	}
+
+	sendImageURLTOServer(conn, imgURL)
+
+	fullMessage, err := ReadImagePacket(conn)
+	if err != nil {
+		return
+	}
+
+	saveImageToFile(fullMessage, "test" + ".jpg")
 
 	// tftp, err := DeserializeTFTPRRQ(chunk[:n])
 	// if err != nil {
