@@ -2,13 +2,12 @@ package main
 
 import (
 	"assignment-2/helper"
-	"fmt"
 )
 
-func CreateTFTPACKPacket() ([]byte, error) {
+func CreateTFTPACKPacket(blockNumber uint16) ([]byte, error) {
 	tftpAckPacket := tftpACKPacket{
 		Opcode: 4,
-		Block:  1,
+		Block:  blockNumber,
 	}
 
 	tftpAckBytes, err := tftpAckPacket.SerializeTFTPACK()
@@ -17,6 +16,5 @@ func CreateTFTPACKPacket() ([]byte, error) {
 		return nil, err
 	}
 
-	helper.ColorPrintln("green", fmt.Sprintf("Serialized TFTP ACK Packet: % X", tftpAckBytes))
 	return tftpAckBytes, nil
 }

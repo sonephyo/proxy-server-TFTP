@@ -4,7 +4,6 @@ import (
 	// "assignment-2/helper"
 	"assignment-2/helper"
 	"bytes"
-	"encoding/binary"
 	"fmt"
 	"image"
 	"image/jpeg"
@@ -83,22 +82,88 @@ func getImageFromURL(url string) []byte {
 	return buf.Bytes()
 }
 
-func operateServerSideImage(conn net.Conn, imgURL string) error {
-	imageBytes := getImageFromURL(imgURL)
-
-	imageSize := len(imageBytes)
-	buf := new(bytes.Buffer)
-	err := binary.Write(buf, binary.BigEndian, int32(imageSize))
+func sendTFTPDATAPacket(conn net.Conn, s *Server, blockNumber uint16, selectedBytes []byte) error {
+	dataPacket, err := CreateTFTPDATAPacket(blockNumber, selectedBytes)
 	if err != nil {
+		helper.ColorPrintln("red", "Error occured: "+err.Error())
+		return err
+	}
+	_, err = conn.Write(dataPacket)
+	if err != nil {
+		fmt.Println(err.Error())
+		close(s.quitch)
 		return err
 	}
 
-	fmt.Println(len(imageBytes))
-	fmt.Println(buf.Bytes())
-	conn.Write(buf.Bytes())
-	conn.Write(imageBytes)
+	return nil
+}
 
-	time.Sleep(1 * time.Minute)
+func recieveTFTPACKPacket(conn net.Conn) error {
+	buf := make([]byte, 4)
+	n, err := conn.Read(buf)
+	if err != nil {
+		log.Fatal(err.Error())
+		return err
+	}
+
+	tftpACKPacket, err := DeserializeTFTPACK(buf[:n])
+	if err != nil {
+		return err
+	}
+	fmt.Println("Recieved Ack block number: ", tftpACKPacket.Block)
+	return nil
+}
+
+func operateServerSideImage(conn net.Conn, imgURL string, s *Server) error {
+	imageBytes := getImageFromURL(imgURL)
+
+	imageLen := len(imageBytes)
+
+	chunkSize := 512
+	var blockNumber uint16 = 1
+
+	helper.ColorPrintln("yellow", fmt.Sprintf("The image Length: %v", imageLen))
+
+	for i := 0; i < imageLen; i += chunkSize {
+
+		helper.ColorPrintln("white", fmt.Sprintf("Remaining Length: %v", imageLen - i))
+
+		if imageLen-i < 512 {
+			// Do something with the remaining which will close the connection
+			remainingBytes := imageLen - i
+			sendTFTPDATAPacket(conn, s, blockNumber, imageBytes[i:i+remainingBytes])
+
+			recieveTFTPACKPacket(conn)
+
+			time.Sleep(3 * time.Second)
+			fmt.Println("3 seconds passes by ...")
+
+			break
+		}
+
+		sendTFTPDATAPacket(conn, s, blockNumber, imageBytes[i:i+512]) // Writing
+
+		blockNumber++
+
+		recieveTFTPACKPacket(conn) // Reading
+
+		time.Sleep(1 * time.Millisecond)
+		fmt.Println("1 miliseconds passes by ...")
+	}
+
+	// imageSize := len(imageBytes)
+	// buf := new(bytes.Buffer)
+	// err := binary.Write(buf, binary.BigEndian, int32(imageSize))
+	// if err != nil {
+	// 	return err
+	// }
+
+	// fmt.Println(len(imageBytes))
+	// fmt.Println(buf.Bytes())
+	// conn.Write(buf.Bytes())
+	// conn.Write(imageBytes)
+
+	// time.Sleep(1 * time.Minute)
 	return nil
 }
 
@@ -106,61 +171,18 @@ func (s *Server) readLoop(conn net.Conn) {
 	defer conn.Close()
 	helper.ColorPrintln("green", "New client connected: "+conn.RemoteAddr().String())
 
-	// for {
-
-	// send operation for DATA packet
-	dataPacket, err := CreateTFTPDATAPacket()
-	if err != nil {
-		helper.ColorPrintln("red", "Error occured: "+err.Error())
-		return
-	}
-	_, err = conn.Write(dataPacket)
-	if err != nil {
-		fmt.Println(err.Error())
-		close(s.quitch)
-		return
-	}
-	time.Sleep(3 * time.Second)
-	fmt.Println("3 seconds passes by ...")
-
-
-	buf := make([]byte, 4)
+	buf := make([]byte, 2048)
 	n, err := conn.Read(buf)
 	if err != nil {
-		log.Fatal(err.Error())
+		fmt.Println("read error: ", err)
 		return
 	}
-	fmt.Println(buf[:n])
 
-	// ack := make([]byte, 4) // TFTP ACK packet size
-	// n, err := conn.Read(ack)
-	// if err != nil {
-	// 	helper.ColorPrintln("red", "Read Error (ACK expected): "+err.Error())
-	// 	close(s.quitch)
-	// 	return
-	// }
-	// fmt.Println(ack[:n])
+	imgURL := string(buf[:n])
+	err = operateServerSideImage(conn, imgURL, s)
+	if err != nil {
+		helper.ColorPrintln("red", "Something went wrong: "+err.Error())
+		return
+	}
 
-	// buf := make([]byte, 2048)
-	// n, err := conn.Read(buf)
-	// if err != nil {
-	// 	fmt.Println("read error: ", err)
-	// 	continue
-	// }
-
-	// imgURL := string(buf[:n])
-	// err = operateServerSideImage(conn, imgURL)
-	// if err != nil {
-	// 	helper.ColorPrintln("red", "Something went wrong: "+err.Error())
-	// 	return
-	// }
-
-	// tftpRRQPacket, err := CreateTFTPRRQPacket()
-	// if err != nil {
-	// 	helper.ColorPrintln("red", "Error occured: "+err.Error())
-	// 	return
-	// }
-	// conn.Write(tftpRRQPacket)
-
-	// }
 }
