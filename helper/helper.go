@@ -27,6 +27,6 @@ func ColorPrintln(color string, text string) {
 	if c, exists := colorMap[color]; exists {
 		fmt.Println(c + text + Reset)
 	} else {
-		fmt.Println(text)
+		fmt.Println(Red + text + Reset)
 	}
 }

@@ -1,9 +1,8 @@
 package main
 
 import (
-	"encoding/binary"
+	"assignment-2/helper"
 	"fmt"
-	"io"
 	"log"
 	"net"
 	"os"
@@ -34,44 +33,60 @@ func sendImageURLTOServer(conn net.Conn, imgURL string) error {
 }
 
 func ReadImagePacket(conn net.Conn) ([]byte, error) {
-	// Reading image size
-	headerBytes := make([]byte, 4)
-	conn.Read(headerBytes)
-	fmt.Println("Received Header:", headerBytes)
-	imgByteLength := uint32(binary.BigEndian.Uint32(headerBytes))
-	fmt.Println(imgByteLength)
-	chunk := make([]byte, 1024)
+
+	chunk := make([]byte, 516)
 
 	var fullMessage []byte
 
-	for uint32(len(fullMessage)) < uint32(imgByteLength) {
-		remaining := imgByteLength - uint32(len(fullMessage))
+	for {
 
-		currentChunkSize := uint32(len(chunk))
-		if currentChunkSize > remaining {
-			currentChunkSize = remaining
-		}
-
-		chunk := make([]byte, currentChunkSize)
 		n, err := conn.Read(chunk)
 		if err != nil {
-			if err == io.EOF && uint32(len(fullMessage)) == imgByteLength {
-				return nil, err
-			}
-			fmt.Println("Error reading chuck: ", err)
+			log.Fatal(err)
 			return nil, err
 		}
 
-		fullMessage = append(fullMessage, chunk[:n]...)
+		tftpData, err := DeserializeTFTPDATA(chunk[:n])
+		if err != nil {
+			log.Fatal(err)
+			return nil, err
+		}
+
+		fullMessage = append(fullMessage, tftpData.Data...)
+
+		helper.ColorPrintln("blue", fmt.Sprintf("Opcode: %d, Block: %d, Data Length: %v", tftpData.Opcode, tftpData.Block, len(tftpData.Data)))
+		helper.ColorPrintln("red", fmt.Sprintf("fullMessage Length: %v", len(fullMessage)))
+
+		tftpAckPacketBytes, err := CreateTFTPACKPacket(tftpData.Block)
+		if err != nil {
+			log.Fatal(err)
+			return nil, err
+		}
+		fmt.Println("Sending Data: ", tftpAckPacketBytes)
+
+		_, err = conn.Write(tftpAckPacketBytes)
+		if err != nil {
+			log.Fatal("Error sending ACK:", err)
+			return nil, err
+		}
+		fmt.Printf("Sent ACK for block %d\n", tftpData.Block)
+		helper.ColorPrintln("cyan", "The value of n is "+fmt.Sprint(n))
+		if n != 516 {
+			break
+		}
 	}
 
+	// To do next :
+	// 1. What if the block number are duplicated
+	// 2. What if an error packet is sent
+	helper.ColorPrintln("green", "End of recieving all data")
 	fmt.Println(len(fullMessage))
 	return fullMessage, nil
 }
 
 func main() {
 	hostAddress := "localhost:3000"
-	// imgURL := "https://static.boredpanda.com/blog/wp-content/uploads/2020/07/funny-expressive-dog-corgi-genthecorgi-1-1-5f0ea719ea38a__700.jpg"
+	imgURL := "https://static.boredpanda.com/blog/wp-content/uploads/2020/07/funny-expressive-dog-corgi-genthecorgi-1-1-5f0ea719ea38a__700.jpg"
 
 	// Creating connection with the server
 	conn, err := net.Dial("tcp", hostAddress)
@@ -80,44 +95,15 @@ func main() {
 		return
 	}
 
-	// sendImageURLTOServer(conn, imgURL)
+	sendImageURLTOServer(conn, imgURL)
 
-	// fullMessage, err := ReadImagePacket(conn)
-	// if err != nil {
-	// 	return
-	// }
-
-	// saveImageToFile(fullMessage, "test" + ".jpg")
-
-	chunk := make([]byte, 1024)
-	n, err := conn.Read(chunk)
+	fullMessage, err := ReadImagePacket(conn)
 	if err != nil {
-		log.Fatal(err)
 		return
 	}
 
-	tftp, err := DeserializeTFTPDATA(chunk[:n])
-	if err != nil {
-		fmt.Println("Error: ", err)
-		return
-	}
-	fmt.Println(string(chunk[:n]))
-	fmt.Println(tftp.Block, ",", tftp.Opcode)
-
-	tftpAckPacketBytes, err := CreateTFTPACKPacket()
-	if err != nil {
-		log.Fatal(err)
-		return
-	}
-	fmt.Println("Sending Data: ", tftpAckPacketBytes)
-	fmt.Println("Length of the data:", len(tftpAckPacketBytes))
-
-	_, err = conn.Write(tftpAckPacketBytes)
-	if err != nil {
-		log.Fatal("Error sending ACK:", err)
-		return
-	}
-	// fmt.Printf("Sent ACK for block %d\n", tftp.Block)
+	fmt.Println(len(fullMessage))
+	saveImageToFile(fullMessage, "test"+".jpg")
 
 	conn.Close()
 	// time.Sleep(100 * time.Second)

@@ -1,7 +1,6 @@
 package main
 
 import (
-	"assignment-2/helper"
 	"fmt"
 )
 
@@ -19,16 +18,15 @@ func CreateTFTPRRQPacket() ([]byte, error) {
 		return nil, err
 	}
 
-	helper.ColorPrintln("green", "Serialized TFTP RRQ Request: "+string(data))
-	fmt.Printf("Hex Dump: % x\n", data)
+	fmt.Printf("Data Length: %v\n", len(data))
 	return data, nil
 }
 
-func CreateTFTPDATAPacket() ([]byte, error) {
+func CreateTFTPDATAPacket(blockNumber uint16, selectedBytes []byte) ([]byte, error) {
 	request := tftpDATAPacket{
 		Opcode: 1,
-		Block:  1,
-		Data:   []byte("Hello"),
+		Block:  blockNumber,
+		Data:   selectedBytes,
 	}
 
 	data, err := request.SerializeTFTPDATA()
@@ -37,7 +35,6 @@ func CreateTFTPDATAPacket() ([]byte, error) {
 		return nil, err
 	}
 
-	helper.ColorPrintln("green", "Serialized TFTP DATA Request: "+string(data))
-	fmt.Printf("Hex Dump: % x\n", data)
+	fmt.Printf("Data Length: %v\n", len(data))
 	return data, nil
 }
