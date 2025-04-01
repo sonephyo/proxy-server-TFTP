@@ -5,13 +5,7 @@ import (
 	"fmt"
 )
 
-type tftpRRQPacket struct {
-	Opcode   uint16
-	Filename string
-	Mode     string
-}
-
-func CreateRRQPacket() ([]byte, error) {
+func CreateTFTPRRQPacket() ([]byte, error) {
 
 	request := tftpRRQPacket{
 		Opcode:   1,
@@ -26,6 +20,24 @@ func CreateRRQPacket() ([]byte, error) {
 	}
 
 	helper.ColorPrintln("green", "Serialized TFTP RRQ Request: "+string(data))
+	fmt.Printf("Hex Dump: % x\n", data)
+	return data, nil
+}
+
+func CreateTFTPDATAPacket() ([]byte, error) {
+	request := tftpDATAPacket{
+		Opcode: 1,
+		Block:  1,
+		Data:   []byte("Hello"),
+	}
+
+	data, err := request.SerializeTFTPDATA()
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return nil, err
+	}
+
+	helper.ColorPrintln("green", "Serialized TFTP DATA Request: "+string(data))
 	fmt.Printf("Hex Dump: % x\n", data)
 	return data, nil
 }

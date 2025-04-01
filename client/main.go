@@ -1,7 +1,6 @@
 package main
 
 import (
-	// "assignment-2/helper"
 	"encoding/binary"
 	"fmt"
 	"io"
@@ -44,7 +43,7 @@ func ReadImagePacket(conn net.Conn) ([]byte, error) {
 	chunk := make([]byte, 1024)
 
 	var fullMessage []byte
-	
+
 	for uint32(len(fullMessage)) < uint32(imgByteLength) {
 		remaining := imgByteLength - uint32(len(fullMessage))
 
@@ -65,14 +64,14 @@ func ReadImagePacket(conn net.Conn) ([]byte, error) {
 
 		fullMessage = append(fullMessage, chunk[:n]...)
 	}
-	
+
 	fmt.Println(len(fullMessage))
 	return fullMessage, nil
 }
 
 func main() {
 	hostAddress := "localhost:3000"
-	imgURL := "https://static.boredpanda.com/blog/wp-content/uploads/2020/07/funny-expressive-dog-corgi-genthecorgi-1-1-5f0ea719ea38a__700.jpg"
+	// imgURL := "https://static.boredpanda.com/blog/wp-content/uploads/2020/07/funny-expressive-dog-corgi-genthecorgi-1-1-5f0ea719ea38a__700.jpg"
 
 	// Creating connection with the server
 	conn, err := net.Dial("tcp", hostAddress)
@@ -81,20 +80,45 @@ func main() {
 		return
 	}
 
-	sendImageURLTOServer(conn, imgURL)
+	// sendImageURLTOServer(conn, imgURL)
 
-	fullMessage, err := ReadImagePacket(conn)
+	// fullMessage, err := ReadImagePacket(conn)
+	// if err != nil {
+	// 	return
+	// }
+
+	// saveImageToFile(fullMessage, "test" + ".jpg")
+
+	chunk := make([]byte, 1024)
+	n, err := conn.Read(chunk)
 	if err != nil {
+		log.Fatal(err)
 		return
 	}
 
-	saveImageToFile(fullMessage, "test" + ".jpg")
+	tftp, err := DeserializeTFTPDATA(chunk[:n])
+	if err != nil {
+		fmt.Println("Error: ", err)
+		return
+	}
+	fmt.Println(string(chunk[:n]))
+	fmt.Println(tftp.Block, ",", tftp.Opcode)
 
-	// tftp, err := DeserializeTFTPRRQ(chunk[:n])
-	// if err != nil {
-	// 	fmt.Println("Error: ", err)
-	// 	return
-	// }
-	// fmt.Println(string(chunk[:n]))
-	// fmt.Println(tftp.Filename, ", ", tftp.Mode, ", ", tftp.Opcode)
+	tftpAckPacketBytes, err := CreateTFTPACKPacket()
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	fmt.Println("Sending Data: ", tftpAckPacketBytes)
+	fmt.Println("Length of the data:", len(tftpAckPacketBytes))
+
+	_, err = conn.Write(tftpAckPacketBytes)
+	if err != nil {
+		log.Fatal("Error sending ACK:", err)
+		return
+	}
+	// fmt.Printf("Sent ACK for block %d\n", tftp.Block)
+
+	conn.Close()
+	// time.Sleep(100 * time.Second)
 }
