@@ -11,3 +11,8 @@ type tftpDATAPacket struct {
 	Block  uint16
 	Data   []byte
 }
+
+type tftpACKPacket struct {
+	Opcode uint16
+	Block  uint16
+}

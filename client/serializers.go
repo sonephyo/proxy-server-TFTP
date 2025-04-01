@@ -48,5 +48,3 @@ func (req *tftpERRORPacket) SerializeTFTPERROR() ([]byte, error) {
 
 	return buf.Bytes(), nil
 }
-
-

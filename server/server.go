@@ -8,7 +8,6 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
-	"io"
 	"log"
 	"net"
 	"net/http"
@@ -107,63 +106,61 @@ func (s *Server) readLoop(conn net.Conn) {
 	defer conn.Close()
 	helper.ColorPrintln("green", "New client connected: "+conn.RemoteAddr().String())
 
-	clientDisconnected := make(chan struct{})
+	// for {
 
-	go func() {
-		buf := make([]byte, 1)
-		for {
-			_, err := conn.Read(buf)
-			if err != nil {
-				if err != io.EOF {
-					helper.ColorPrintln("red", "Read Error: "+err.Error())
-				}
-				close(clientDisconnected)
-				return
-			}
-		}
-	}()
-
-	for {
-
-		select {
-		case <-clientDisconnected:
-			helper.ColorPrintln("yellow", "Client disconnected: "+conn.RemoteAddr().String())
-			return
-		case <-time.After(1 * time.Second):
-			dataPacket, err := CreateTFTPDATAPacket()
-			if err != nil {
-				helper.ColorPrintln("red", "Error occured: "+err.Error())
-				return
-			}
-			_, err = conn.Write(dataPacket)
-			if err != nil {
-                helper.ColorPrintln("red", "Write error: "+err.Error())
-                close(s.quitch)
-                return
-            }
-			
-		}
-
-		// buf := make([]byte, 2048)
-		// n, err := conn.Read(buf)
-		// if err != nil {
-		// 	fmt.Println("read error: ", err)
-		// 	continue
-		// }
-
-		// imgURL := string(buf[:n])
-		// err = operateServerSideImage(conn, imgURL)
-		// if err != nil {
-		// 	helper.ColorPrintln("red", "Something went wrong: "+err.Error())
-		// 	return
-		// }
-
-		// tftpRRQPacket, err := CreateTFTPRRQPacket()
-		// if err != nil {
-		// 	helper.ColorPrintln("red", "Error occured: "+err.Error())
-		// 	return
-		// }
-		// conn.Write(tftpRRQPacket)
-
+	// send operation for DATA packet
+	dataPacket, err := CreateTFTPDATAPacket()
+	if err != nil {
+		helper.ColorPrintln("red", "Error occured: "+err.Error())
+		return
 	}
+	_, err = conn.Write(dataPacket)
+	if err != nil {
+		fmt.Println(err.Error())
+		close(s.quitch)
+		return
+	}
+	time.Sleep(3 * time.Second)
+	fmt.Println("3 seconds passes by ...")
+
+
+	buf := make([]byte, 4)
+	n, err := conn.Read(buf)
+	if err != nil {
+		log.Fatal(err.Error())
+		return
+	}
+	fmt.Println(buf[:n])
+
+	// ack := make([]byte, 4) // TFTP ACK packet size
+	// n, err := conn.Read(ack)
+	// if err != nil {
+	// 	helper.ColorPrintln("red", "Read Error (ACK expected): "+err.Error())
+	// 	close(s.quitch)
+	// 	return
+	// }
+	// fmt.Println(ack[:n])
+
+	// buf := make([]byte, 2048)
+	// n, err := conn.Read(buf)
+	// if err != nil {
+	// 	fmt.Println("read error: ", err)
+	// 	continue
+	// }
+
+	// imgURL := string(buf[:n])
+	// err = operateServerSideImage(conn, imgURL)
+	// if err != nil {
+	// 	helper.ColorPrintln("red", "Something went wrong: "+err.Error())
+	// 	return
+	// }
+
+	// tftpRRQPacket, err := CreateTFTPRRQPacket()
+	// if err != nil {
+	// 	helper.ColorPrintln("red", "Error occured: "+err.Error())
+	// 	return
+	// }
+	// conn.Write(tftpRRQPacket)
+
+	// }
 }

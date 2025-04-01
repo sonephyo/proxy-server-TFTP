@@ -47,3 +47,20 @@ func DeserializeTFTPDATA(data []byte) (*tftpDATAPacket, error) {
 		Data:   []byte(packetData),
 	}, nil
 }
+
+func DeserializeTFTPACK(data []byte) (*tftpACKPacket, error) {
+	if len(data) != 4 {
+		return nil, fmt.Errorf("invalid TFTP ACK data: can only be 4 bytes")
+	}
+	opCode := binary.BigEndian.Uint16(data[:2])
+	data = data[2:]
+
+	block := binary.BigEndian.Uint16(data[:2])
+	data = data[2:]
+
+	return &tftpACKPacket{
+		Opcode: opCode,
+		Block:  block,
+	}, nil
+
+}

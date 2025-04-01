@@ -25,10 +25,10 @@ func CreateTFTPRRQPacket() ([]byte, error) {
 }
 
 func CreateTFTPDATAPacket() ([]byte, error) {
-	request := tftpDATAPacket{ 
+	request := tftpDATAPacket{
 		Opcode: 1,
 		Block:  1,
-		Data:[]byte("Hello"),
+		Data:   []byte("Hello"),
 	}
 
 	data, err := request.SerializeTFTPDATA()
@@ -39,5 +39,5 @@ func CreateTFTPDATAPacket() ([]byte, error) {
 
 	helper.ColorPrintln("green", "Serialized TFTP DATA Request: "+string(data))
 	fmt.Printf("Hex Dump: % x\n", data)
-	return data, nil	
+	return data, nil
 }

@@ -102,16 +102,23 @@ func main() {
 		return
 	}
 	fmt.Println(string(chunk[:n]))
-	fmt.Println(tftp.Block, ", ", tftp.Opcode, ", ", tftp.Block)
+	fmt.Println(tftp.Block, ",", tftp.Opcode)
+
+	tftpAckPacketBytes, err := CreateTFTPACKPacket()
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	fmt.Println("Sending Data: ", tftpAckPacketBytes)
+	fmt.Println("Length of the data:", len(tftpAckPacketBytes))
+
+	_, err = conn.Write(tftpAckPacketBytes)
+	if err != nil {
+		log.Fatal("Error sending ACK:", err)
+		return
+	}
+	// fmt.Printf("Sent ACK for block %d\n", tftp.Block)
+
 	conn.Close()
-
-
-	// tftpAckPacketBytes, err := CreateTFTPACKPacket()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// 	return
-	// }
-
-	// conn.Write(tftpAckPacketBytes)	
-
+	// time.Sleep(100 * time.Second)
 }
