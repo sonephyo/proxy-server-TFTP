@@ -26,6 +26,8 @@ type Server struct {
 	Msgch         chan Message
 }
 
+var imageCache = make(map[string][]byte)
+
 // The NetServer represent the method in which creating a server and giving a default values
 func NewServer(listenAddress string) *Server {
 	return &Server{
@@ -66,6 +68,12 @@ func (s *Server) acceptLoop() {
 }
 
 func getImageFromURL(url string) []byte {
+
+	if imageData, exists := imageCache[url]; exists {
+		helper.ColorPrintln("green", "URL found in cache. Returning cached data ...")
+		return imageData
+	}
+
 	response, e := http.Get(url)
 	fmt.Println("Response Status code: ", response.StatusCode)
 	if e != nil {
@@ -79,6 +87,8 @@ func getImageFromURL(url string) []byte {
 	if err != nil {
 		fmt.Println("Something wrong with getting image from URL: ", err.Error())
 	}
+
+	imageCache[url] = buf.Bytes()
 	return buf.Bytes()
 }
 
@@ -115,6 +125,9 @@ func recieveTFTPACKPacket(conn net.Conn) error {
 }
 
 func operateServerSideImage(conn net.Conn, imgURL string, s *Server) error {
+
+
+
 	imageBytes := getImageFromURL(imgURL)
 
 	imageLen := len(imageBytes)
