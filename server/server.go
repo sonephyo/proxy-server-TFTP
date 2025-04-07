@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -126,8 +127,6 @@ func recieveTFTPACKPacket(conn net.Conn) error {
 
 func operateServerSideImage(conn net.Conn, imgURL string, s *Server) error {
 
-
-
 	imageBytes := getImageFromURL(imgURL)
 
 	imageLen := len(imageBytes)
@@ -137,46 +136,58 @@ func operateServerSideImage(conn net.Conn, imgURL string, s *Server) error {
 
 	helper.ColorPrintln("yellow", fmt.Sprintf("The image Length: %v", imageLen))
 
+	// Preping for mutux
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	maxInFlight := 10
+	var inFlight int
+	windowNotFull := sync.NewCond(&mu)
+
 	for i := 0; i < imageLen; i += chunkSize {
 
-		helper.ColorPrintln("white", fmt.Sprintf("Remaining Length: %v", imageLen - i))
+		helper.ColorPrintln("white", fmt.Sprintf("Remaining Length: %v", imageLen-i))
+		isLastChunk := false
+		var dataToSend []byte
 
 		if imageLen-i < 512 {
 			// Do something with the remaining which will close the connection
 			remainingBytes := imageLen - i
-			sendTFTPDATAPacket(conn, s, blockNumber, imageBytes[i:i+remainingBytes])
+			dataToSend = imageBytes[i : i+remainingBytes]
+			isLastChunk = true
+		} else {
+			dataToSend = imageBytes[i : i+512]
+		}
+
+		//Checking and modifying shared mutux if window available to send
+		mu.Lock()
+		for inFlight >= maxInFlight {
+			windowNotFull.Wait()
+		}
+		inFlight++
+		currentBlock := blockNumber
+		blockNumber++
+		mu.Unlock()
+
+		wg.Add(1)
+		go func(block uint16, data []byte, isLast bool) {
+			defer wg.Done()
+			sendTFTPDATAPacket(conn, s, blockNumber, dataToSend)
 
 			recieveTFTPACKPacket(conn)
 
-			time.Sleep(3 * time.Second)
-			fmt.Println("3 seconds passes by ...")
-
+			mu.Lock()
+			inFlight--
+			windowNotFull.Signal()
+			mu.Unlock()
+		}(currentBlock, dataToSend, isLastChunk)
+		time.Sleep(1 * time.Millisecond)
+		if isLastChunk {
 			break
 		}
-
-		sendTFTPDATAPacket(conn, s, blockNumber, imageBytes[i:i+512]) // Writing
-
-		blockNumber++
-
-		recieveTFTPACKPacket(conn) // Reading
-
-		time.Sleep(1 * time.Millisecond)
-		fmt.Println("1 miliseconds passes by ...")
 	}
 
-	// imageSize := len(imageBytes)
-	// buf := new(bytes.Buffer)
-	// err := binary.Write(buf, binary.BigEndian, int32(imageSize))
-	// if err != nil {
-	// 	return err
-	// }
-
-	// fmt.Println(len(imageBytes))
-	// fmt.Println(buf.Bytes())
-	// conn.Write(buf.Bytes())
-	// conn.Write(imageBytes)
-
-	// time.Sleep(1 * time.Minute)
+	fmt.Println(imageBytes[:100])
+	wg.Wait()
 	return nil
 }
 

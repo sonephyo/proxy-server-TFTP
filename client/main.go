@@ -81,6 +81,7 @@ func ReadImagePacket(conn net.Conn) ([]byte, error) {
 	// 2. What if an error packet is sent
 	helper.ColorPrintln("green", "End of recieving all data")
 	fmt.Println(len(fullMessage))
+	fmt.Println(fullMessage[:100])
 	return fullMessage, nil
 }
 
