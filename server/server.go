@@ -7,9 +7,10 @@ import (
 	"fmt"
 	"image"
 	"image/jpeg"
-	"log"
 	"net"
 	"net/http"
+	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -75,11 +76,11 @@ func getImageFromURL(url string) []byte {
 		return imageData
 	}
 
-	response, e := http.Get(url)
+	response, _ := http.Get(url)
 	fmt.Println("Response Status code: ", response.StatusCode)
-	if e != nil {
-		log.Fatal(e)
-	}
+	// if e != nil {
+	// 	log.Fatal(e)
+	// }
 	defer response.Body.Close()
 	selected_image, _, _ := image.Decode(response.Body)
 
@@ -99,6 +100,7 @@ func sendTFTPDATAPacket(conn net.Conn, s *Server, blockNumber uint16, selectedBy
 		helper.ColorPrintln("red", "Error occured: "+err.Error())
 		return err
 	}
+	helper.ColorPrintln("magenta", "Sending: "+fmt.Sprint(blockNumber))
 	_, err = conn.Write(dataPacket)
 	if err != nil {
 		fmt.Println(err.Error())
@@ -109,20 +111,20 @@ func sendTFTPDATAPacket(conn net.Conn, s *Server, blockNumber uint16, selectedBy
 	return nil
 }
 
-func recieveTFTPACKPacket(conn net.Conn) error {
+func recieveTFTPACKPacket(conn net.Conn) (int, error) {
 	buf := make([]byte, 4)
 	n, err := conn.Read(buf)
 	if err != nil {
-		log.Fatal(err.Error())
-		return err
+		// log.Fatal(err.Error())
+		return -1, err
 	}
 
 	tftpACKPacket, err := DeserializeTFTPACK(buf[:n])
 	if err != nil {
-		return err
+		return -1, err
 	}
 	fmt.Println("Recieved Ack block number: ", tftpACKPacket.Block)
-	return nil
+	return int(tftpACKPacket.Block), nil
 }
 
 func operateServerSideImage(conn net.Conn, imgURL string, s *Server) error {
@@ -132,7 +134,25 @@ func operateServerSideImage(conn net.Conn, imgURL string, s *Server) error {
 	imageLen := len(imageBytes)
 
 	chunkSize := 512
-	var blockNumber uint16 = 1
+
+	imageBytesBlocks := make(map[uint16][]byte)
+	currentIdx := 0
+	var i uint16 = 0
+	for {
+		if currentIdx+chunkSize >= imageLen {
+			imageBytesBlocks[i] = imageBytes[currentIdx:]
+			break
+		}
+		imageBytesBlocks[i] = imageBytes[currentIdx : currentIdx+chunkSize]
+		currentIdx += chunkSize
+		i += 1
+	}
+
+	for item, value := range imageBytesBlocks {
+		fmt.Printf("%v Key: %v\n", item, len(value))
+	}
+
+	var blockNumber uint16 = 0
 
 	helper.ColorPrintln("yellow", fmt.Sprintf("The image Length: %v", imageLen))
 
@@ -143,22 +163,13 @@ func operateServerSideImage(conn net.Conn, imgURL string, s *Server) error {
 	var inFlight int
 	windowNotFull := sync.NewCond(&mu)
 
-	for i := 0; i < imageLen; i += chunkSize {
+	var acknowledgedBlocks []int
 
-		helper.ColorPrintln("white", fmt.Sprintf("Remaining Length: %v", imageLen-i))
-		isLastChunk := false
-		var dataToSend []byte
+	i = 0
+	for key := range len(imageBytesBlocks) - 1 {
+		dataToSend := imageBytesBlocks[uint16(key)]
+		helper.ColorPrintln("red", "Key: "+fmt.Sprint(key))
 
-		if imageLen-i < 512 {
-			// Do something with the remaining which will close the connection
-			remainingBytes := imageLen - i
-			dataToSend = imageBytes[i : i+remainingBytes]
-			isLastChunk = true
-		} else {
-			dataToSend = imageBytes[i : i+512]
-		}
-
-		//Checking and modifying shared mutux if window available to send
 		mu.Lock()
 		for inFlight >= maxInFlight {
 			windowNotFull.Wait()
@@ -169,25 +180,70 @@ func operateServerSideImage(conn net.Conn, imgURL string, s *Server) error {
 		mu.Unlock()
 
 		wg.Add(1)
-		go func(block uint16, data []byte, isLast bool) {
+		go func(block uint16, data []byte) {
 			defer wg.Done()
 			sendTFTPDATAPacket(conn, s, blockNumber, dataToSend)
 
-			recieveTFTPACKPacket(conn)
+			recievedBlock, _ := recieveTFTPACKPacket(conn)
 
 			mu.Lock()
 			inFlight--
 			windowNotFull.Signal()
+			acknowledgedBlocks = append(acknowledgedBlocks, recievedBlock)
 			mu.Unlock()
-		}(currentBlock, dataToSend, isLastChunk)
+		}(currentBlock, dataToSend)
+
 		time.Sleep(1 * time.Millisecond)
-		if isLastChunk {
-			break
+
+	}
+	keys := make([]uint16, 0, len(imageBytesBlocks))
+	var tempL int
+	for k, v := range imageBytesBlocks {
+		keys = append(keys, k)
+		tempL += len(v)
+	}
+	helper.ColorPrintln("blue", "Here:"+fmt.Sprint(tempL))
+	slices.Sort(keys)
+	fmt.Println(keys)
+
+	operateUnAckBlocks(conn, s, imageBytesBlocks, acknowledgedBlocks)
+
+	fmt.Println(imageBytes[:200])
+	wg.Wait()
+	return nil
+}
+
+func operateUnAckBlocks(conn net.Conn, s *Server, imageBytesBlocks map[uint16][]byte, acknowledgedBlocks []int) {
+	var unAckBlocks []int
+	for key := range imageBytesBlocks {
+		found := false
+		for _, ackBlock := range acknowledgedBlocks {
+			if int(key) == ackBlock {
+				found = true
+				break
+			}
+		}
+		if !found {
+			unAckBlocks = append(unAckBlocks, int(key))
 		}
 	}
 
-	fmt.Println(imageBytes[:100])
-	wg.Wait()
+	helper.ColorPrintln("red", "Unack blocks: "+strings.Trim(strings.Join(strings.Fields(fmt.Sprint(unAckBlocks)), ","), "[]"))
+
+	sendUnAcknowledgedBlocks(conn, s, imageBytesBlocks, unAckBlocks)
+}
+
+func sendUnAcknowledgedBlocks(conn net.Conn, s *Server, imageBytesBlocks map[uint16][]byte, blocks []int) error {
+
+	for _, blockNumber := range blocks {
+		helper.ColorPrintln("cyan", fmt.Sprint(blockNumber)+", "+fmt.Sprint(len(imageBytesBlocks[uint16(blockNumber)])))
+
+		dataToSend := imageBytesBlocks[uint16(blockNumber)]
+		sendTFTPDATAPacket(conn, s, uint16(blockNumber), dataToSend)
+
+		recieveTFTPACKPacket(conn)
+		time.Sleep(1 * time.Millisecond)
+	}
 	return nil
 }
 
