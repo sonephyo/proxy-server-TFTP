@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"sort"
 )
 
 func saveImageToFile(imageBytes []byte, filename string) {
@@ -32,12 +31,31 @@ func sendImageURLTOServer(conn net.Conn, imgURL string) error {
 	}
 	return nil
 }
+
+func flattenByteArray(arr [][]byte) []byte {
+	totalLength := 0
+	for _, row := range arr {
+		totalLength += len(row)
+	}
+
+	flattened := make([]byte, 0, totalLength)
+
+	for i, row := range arr {
+		fmt.Printf("--> This is row number %v data is %v\n", i, row[:5])
+		flattened = append(flattened, row...)
+	}
+	fmt.Printf("-----------> Data temp to check: %v", flattened[:10])
+
+	return flattened
+}
+
 func ReadImagePacket(conn net.Conn) ([]byte, error) {
 	// 516 bytes per TFTP DATA packet (opcode, block, data)
-	chunk := make([]byte, 1024)
+	chunk := make([]byte, 516)
 
 	// Map to hold the data for each block number.
-	blocks := make(map[uint16][]byte)
+	// blocks := make(map[uint16][]byte)
+	var blocks [][]byte
 
 	for {
 		n, err := conn.Read(chunk)
@@ -52,12 +70,9 @@ func ReadImagePacket(conn net.Conn) ([]byte, error) {
 			log.Fatal(err)
 			return nil, err
 		}
+		// time.Sleep(5 * time.Second)
 
-		// Store the block data by its block number.
-		blocks[tftpData.Block] = tftpData.Data
-
-		helper.ColorPrintln("blue", fmt.Sprintf("Opcode: %d, Block: %d, Data Length: %v", tftpData.Opcode, tftpData.Block, len(tftpData.Data)))
-		helper.ColorPrintln("red", fmt.Sprintf("Stored block %d; current total blocks: %v", tftpData.Block, len(blocks)))
+		blocks = helper.ReplaceInnerSlice(blocks, int(tftpData.Block), tftpData.Data)
 
 		// Create and send ACK for the current block.
 		tftpAckPacketBytes, err := CreateTFTPACKPacket(tftpData.Block)
@@ -81,21 +96,13 @@ func ReadImagePacket(conn net.Conn) ([]byte, error) {
 	}
 
 	helper.ColorPrintln("green", "Finished receiving all data")
-	// Reorder blocks by their block number.
-	var keys []int
-	for key := range blocks {
-		keys = append(keys, int(key))
-	}
-	sort.Ints(keys)
+	fmt.Printf("%v", blocks[0][:10])
+	fmt.Printf("%v", blocks[10][:10])
 
-	// Reassemble full message in proper order.
-	var fullMessage []byte
-	for _, k := range keys {
-		fullMessage = append(fullMessage, blocks[uint16(k)]...)
-	}
+	fullMessage := flattenByteArray(blocks)
 
 	helper.ColorPrintln("green", fmt.Sprintf("Full message length: %v", len(fullMessage)))
-	fmt.Println(fullMessage[:100])
+	// fmt.Println(fullMessage[:])
 	return fullMessage, nil
 }
 

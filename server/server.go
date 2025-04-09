@@ -10,7 +10,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"sync"
 )
 
 type Message struct {
@@ -108,35 +107,36 @@ func sendTFTPDATAPacket(conn net.Conn, s *Server, blockNumber uint16, selectedBy
 	return nil
 }
 
-func recieveTFTPACKPacket(conn net.Conn) error {
+func recieveTFTPACKPacket(conn net.Conn) (uint16, error) {
 	buf := make([]byte, 4)
 	n, err := conn.Read(buf)
 	if err != nil {
 		log.Fatal(err.Error())
-		return err
+		return 0, err
 	}
 
 	tftpACKPacket, err := DeserializeTFTPACK(buf[:n])
 	if err != nil {
-		return err
+		return 0, err
 	}
 	fmt.Println("Recieved Ack block number: ", tftpACKPacket.Block)
-	return nil
+	return tftpACKPacket.Block, nil
 }
 
-func getImageBytesBlocks(imageBytes []byte, blockSize int) map[int][]byte {
+func getImageBytesBlocks(imageBytes []byte, blockSize int) [][]byte {
 	if blockSize <= 0 {
 		panic("blockSize must be greater than 0")
 	}
 
-	blocks := make(map[int][]byte)
+	var blocks [][]byte
 	for i := 0; i < len(imageBytes); i += blockSize {
 		end := i + blockSize
 		if end > len(imageBytes) {
 			end = len(imageBytes)
 		}
-		blocks[i/blockSize] = imageBytes[i:end]
+		blocks = append(blocks, imageBytes[i:end])
 	}
+
 	return blocks
 }
 
@@ -146,44 +146,21 @@ func operateServerSideImage(conn net.Conn, imgURL string, s *Server) error {
 
 	imageBytesBlocks := getImageBytesBlocks(imageBytes, 512)
 
-	imageLen := len(imageBytes)
+	fmt.Printf("-----> Test for block 1 is %v", imageBytesBlocks[1][:5])
+	fmt.Printf("-----> Test for block 10 is %v", imageBytesBlocks[10][:5])
 
-	// chunkSize := 512
-	// var blockNumber uint16 = 1
+	fmt.Println("Total Blocks: ", len(imageBytesBlocks))
 
-	helper.ColorPrintln("yellow", fmt.Sprintf("The image Length: %v", imageLen))
-
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	maxInFlight := 4
-	var inFlight int
-	windowNotFull := sync.NewCond(&mu) 
-
-
-	// blockNumber will start from index 0
-	for blockNumber := range imageBytesBlocks {
-		imageBlock := imageBytesBlocks[blockNumber]
-		
-		mu.Lock()
-		for inFlight >= maxInFlight {
-			windowNotFull.Wait()
+	for i, block := range imageBytesBlocks {
+		fmt.Printf("-----> Test for block %v is %v", i, block[:5])
+		sendTFTPDATAPacket(conn, s, uint16(i), block)
+		ack, err := recieveTFTPACKPacket(conn)
+		if err != nil || ack != uint16(i) {
+			log.Printf("Ack error: expected %d, got %d", i, ack)
+			return err
 		}
-		inFlight ++
-		mu.Unlock()
-		wg.Add(1)
-
-		go func(block uint16, data []byte) {
-			defer wg.Done()
-
-			sendTFTPDATAPacket(conn, s, uint16(blockNumber), data)
-			recieveTFTPACKPacket(conn)
-			mu.Lock()
-			inFlight--
-			windowNotFull.Signal()
-			mu.Unlock()
-		}(uint16(blockNumber), imageBlock)
+		fmt.Printf("Recieved %d, Got %d\n", i, ack)
 	}
-
 
 	// 	go func(block uint16, data []byte, isLast bool) {
 	// 		defer wg.Done()

@@ -30,3 +30,18 @@ func ColorPrintln(color string, text string) {
 		fmt.Println(Red + text + Reset)
 	}
 }
+
+func ReplaceInnerSlice(doubleByteArray [][]byte, index int, newByteArray []byte) [][]byte {
+	if index >= len(doubleByteArray) {
+		newSlice := make([][]byte, index+1)
+		copy(newSlice, doubleByteArray)
+		doubleByteArray = newSlice
+	}
+
+	// Create a copy of the new byte array to ensure it's independent
+	copyBytes := make([]byte, len(newByteArray))
+	copy(copyBytes, newByteArray)
+
+	doubleByteArray[index] = copyBytes
+	return doubleByteArray
+}
