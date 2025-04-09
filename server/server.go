@@ -10,8 +10,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"sync"
-	"time"
 )
 
 type Message struct {
@@ -125,69 +123,97 @@ func recieveTFTPACKPacket(conn net.Conn) error {
 	return nil
 }
 
+func getImageBytesBlocks(imageBytes []byte, blockSize int) map[int][]byte {
+	if blockSize <= 0 {
+		panic("blockSize must be greater than 0")
+	}
+
+	blocks := make(map[int][]byte)
+	for i := 0; i < len(imageBytes); i += blockSize {
+		end := i + blockSize
+		if end > len(imageBytes) {
+			end = len(imageBytes)
+		}
+		blocks[i/blockSize] = imageBytes[i:end]
+	}
+	return blocks
+}
+
 func operateServerSideImage(conn net.Conn, imgURL string, s *Server) error {
 
 	imageBytes := getImageFromURL(imgURL)
 
+	imageBytesBlocks := getImageBytesBlocks(imageBytes, 512)
+
 	imageLen := len(imageBytes)
 
-	chunkSize := 512
-	var blockNumber uint16 = 1
+	// chunkSize := 512
+	// var blockNumber uint16 = 1
 
 	helper.ColorPrintln("yellow", fmt.Sprintf("The image Length: %v", imageLen))
 
-	// Preping for mutux
-	var mu sync.Mutex
-	var wg sync.WaitGroup
-	maxInFlight := 10
-	var inFlight int
-	windowNotFull := sync.NewCond(&mu)
-
-	for i := 0; i < imageLen; i += chunkSize {
-
-		helper.ColorPrintln("white", fmt.Sprintf("Remaining Length: %v", imageLen-i))
-		isLastChunk := false
-		var dataToSend []byte
-
-		if imageLen-i < 512 {
-			// Do something with the remaining which will close the connection
-			remainingBytes := imageLen - i
-			dataToSend = imageBytes[i : i+remainingBytes]
-			isLastChunk = true
-		} else {
-			dataToSend = imageBytes[i : i+512]
-		}
-
-		//Checking and modifying shared mutux if window available to send
-		mu.Lock()
-		for inFlight >= maxInFlight {
-			windowNotFull.Wait()
-		}
-		inFlight++
-		currentBlock := blockNumber
-		blockNumber++
-		mu.Unlock()
-
-		wg.Add(1)
-		go func(block uint16, data []byte, isLast bool) {
-			defer wg.Done()
-			sendTFTPDATAPacket(conn, s, blockNumber, dataToSend)
-
-			recieveTFTPACKPacket(conn)
-
-			mu.Lock()
-			inFlight--
-			windowNotFull.Signal()
-			mu.Unlock()
-		}(currentBlock, dataToSend, isLastChunk)
-		time.Sleep(1 * time.Millisecond)
-		if isLastChunk {
-			break
+	for key := range imageBytesBlocks {
+		if key == 0 || key == 1 || key == 2 {
+			fmt.Println(key, imageBytesBlocks[key])
+		} else if key == 99 {
+			fmt.Println(key, imageBytesBlocks[key])
+		} else{
+			fmt.Println(key)
 		}
 	}
 
-	fmt.Println(imageBytes[:100])
-	wg.Wait()
+	// Preping for mutux
+	// var mu sync.Mutex
+	// var wg sync.WaitGroup
+	// maxInFlight := 10
+	// var inFlight int
+	// windowNotFull := sync.NewCond(&mu)
+
+	// for i := 0; i < imageLen; i += chunkSize {
+
+	// 	helper.ColorPrintln("white", fmt.Sprintf("Remaining Length: %v", imageLen-i))
+	// 	isLastChunk := false
+	// 	var dataToSend []byte
+
+	// 	if imageLen-i < 512 {
+	// 		// Do something with the remaining which will close the connection
+	// 		remainingBytes := imageLen - i
+	// 		dataToSend = imageBytes[i : i+remainingBytes]
+	// 		isLastChunk = true
+	// 	} else {
+	// 		dataToSend = imageBytes[i : i+512]
+	// 	}
+
+	// 	//Checking and modifying shared mutux if window available to send
+	// 	mu.Lock()
+	// 	for inFlight >= maxInFlight {
+	// 		windowNotFull.Wait()
+	// 	}
+	// 	inFlight++
+	// 	currentBlock := blockNumber
+	// 	blockNumber++
+	// 	mu.Unlock()
+
+	// 	wg.Add(1)
+	// 	go func(block uint16, data []byte, isLast bool) {
+	// 		defer wg.Done()
+	// 		sendTFTPDATAPacket(conn, s, blockNumber, dataToSend)
+
+	// 		recieveTFTPACKPacket(conn)
+
+	// 		mu.Lock()
+	// 		inFlight--
+	// 		windowNotFull.Signal()
+	// 		mu.Unlock()
+	// 	}(currentBlock, dataToSend, isLastChunk)
+	// 	time.Sleep(1 * time.Millisecond)
+	// 	if isLastChunk {
+	// 		break
+	// 	}
+	// }
+
+	// fmt.Println(imageBytes[:100])
+	// wg.Wait()
 	return nil
 }
 
