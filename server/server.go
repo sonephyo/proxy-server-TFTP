@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"sync"
 )
 
 type Message struct {
@@ -152,49 +153,38 @@ func operateServerSideImage(conn net.Conn, imgURL string, s *Server) error {
 
 	helper.ColorPrintln("yellow", fmt.Sprintf("The image Length: %v", imageLen))
 
-	for key := range imageBytesBlocks {
-		if key == 0 || key == 1 || key == 2 {
-			fmt.Println(key, imageBytesBlocks[key])
-		} else if key == 99 {
-			fmt.Println(key, imageBytesBlocks[key])
-		} else{
-			fmt.Println(key)
+	var mu sync.Mutex
+	var wg sync.WaitGroup
+	maxInFlight := 4
+	var inFlight int
+	windowNotFull := sync.NewCond(&mu) 
+
+
+	// blockNumber will start from index 0
+	for blockNumber := range imageBytesBlocks {
+		imageBlock := imageBytesBlocks[blockNumber]
+		
+		mu.Lock()
+		for inFlight >= maxInFlight {
+			windowNotFull.Wait()
 		}
+		inFlight ++
+		mu.Unlock()
+		wg.Add(1)
+
+		go func(block uint16, data []byte) {
+			defer wg.Done()
+
+			sendTFTPDATAPacket(conn, s, uint16(blockNumber), data)
+			recieveTFTPACKPacket(conn)
+			mu.Lock()
+			inFlight--
+			windowNotFull.Signal()
+			mu.Unlock()
+		}(uint16(blockNumber), imageBlock)
 	}
 
-	// Preping for mutux
-	// var mu sync.Mutex
-	// var wg sync.WaitGroup
-	// maxInFlight := 10
-	// var inFlight int
-	// windowNotFull := sync.NewCond(&mu)
 
-	// for i := 0; i < imageLen; i += chunkSize {
-
-	// 	helper.ColorPrintln("white", fmt.Sprintf("Remaining Length: %v", imageLen-i))
-	// 	isLastChunk := false
-	// 	var dataToSend []byte
-
-	// 	if imageLen-i < 512 {
-	// 		// Do something with the remaining which will close the connection
-	// 		remainingBytes := imageLen - i
-	// 		dataToSend = imageBytes[i : i+remainingBytes]
-	// 		isLastChunk = true
-	// 	} else {
-	// 		dataToSend = imageBytes[i : i+512]
-	// 	}
-
-	// 	//Checking and modifying shared mutux if window available to send
-	// 	mu.Lock()
-	// 	for inFlight >= maxInFlight {
-	// 		windowNotFull.Wait()
-	// 	}
-	// 	inFlight++
-	// 	currentBlock := blockNumber
-	// 	blockNumber++
-	// 	mu.Unlock()
-
-	// 	wg.Add(1)
 	// 	go func(block uint16, data []byte, isLast bool) {
 	// 		defer wg.Done()
 	// 		sendTFTPDATAPacket(conn, s, blockNumber, dataToSend)
