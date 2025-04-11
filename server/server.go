@@ -146,28 +146,17 @@ func operateServerSideImage(conn net.Conn, imgURL string, s *Server) error {
 	imageBytes := getImageFromURL(imgURL)
 
 	imageBytesBlocks := getImageBytesBlocks(imageBytes, 512)
-	totalBlocks := len(imageBytesBlocks)
-
-	ackCh := make(chan uint16, totalBlocks)
-	go func() {
-		for {
-			ack, err := recieveTFTPACKPacket(conn)
-			if err == nil {
-				ackCh <- ack
-			} else {
-				// Handle errors or optionally break the loop
-				
-
-				fmt.Println("Error receiving ACK:", err)
-			}
-		}
-	}()
 
 	for i, block := range imageBytesBlocks {
 		fmt.Printf("-----> Test for block %v is %v", i, block[:5])
 
 		sendTFTPDATAPacket(conn, s, uint16(i), block)
-		time.Sleep(1 * time.Millisecond)
+		ack, err := recieveTFTPACKPacket(conn)
+		if err != nil {
+			log.Fatal("recieveTFTPACKPacket has returned an error : ", err)
+		}
+		fmt.Println(ack)
+		// time.Sleep(1 * time.Millisecond)
 	}
 
 	return nil

@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"time"
 )
 
 func saveImageToFile(imageBytes []byte, filename string) {
@@ -125,7 +124,7 @@ func main() {
 
 	fmt.Println(len(fullMessage))
 	saveImageToFile(fullMessage, "test"+".jpg")
-	time.Sleep(10 * time.Second)
+	// time.Sleep(10 * time.Second)
 	defer conn.Close()
-	
+
 }
