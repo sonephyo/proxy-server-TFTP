@@ -32,3 +32,19 @@ ____
 Apr 9 1:32 am
 - solved the issue of the inner array of the byte on the client side having the same data
 Solution - when you pass in an array into the function, you are passing as reference so if you change outside it is also changing all parts where it is being referenced. By creating a new copy the issue is solved
+
+____
+Apr 9 1:38 am
+- starting to work on listening ack in go routines
+
+
+__ 
+Apr 8 1:54 am
+- added go routine and the server is stating EOF error, location of error cannot be identified yet.
+
+
+
+___
+Apr 11 7:27 pm 
+- Going to start the project and see what I can do 
+1) Instead of using go routines, we are going to just use for loops and wait until we get back acknowledgment get back

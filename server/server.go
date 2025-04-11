@@ -10,6 +10,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"time"
 )
 
 type Message struct {
@@ -145,42 +146,30 @@ func operateServerSideImage(conn net.Conn, imgURL string, s *Server) error {
 	imageBytes := getImageFromURL(imgURL)
 
 	imageBytesBlocks := getImageBytesBlocks(imageBytes, 512)
+	totalBlocks := len(imageBytesBlocks)
 
-	fmt.Printf("-----> Test for block 1 is %v", imageBytesBlocks[1][:5])
-	fmt.Printf("-----> Test for block 10 is %v", imageBytesBlocks[10][:5])
+	ackCh := make(chan uint16, totalBlocks)
+	go func() {
+		for {
+			ack, err := recieveTFTPACKPacket(conn)
+			if err == nil {
+				ackCh <- ack
+			} else {
+				// Handle errors or optionally break the loop
+				
 
-	fmt.Println("Total Blocks: ", len(imageBytesBlocks))
+				fmt.Println("Error receiving ACK:", err)
+			}
+		}
+	}()
 
 	for i, block := range imageBytesBlocks {
 		fmt.Printf("-----> Test for block %v is %v", i, block[:5])
+
 		sendTFTPDATAPacket(conn, s, uint16(i), block)
-		ack, err := recieveTFTPACKPacket(conn)
-		if err != nil || ack != uint16(i) {
-			log.Printf("Ack error: expected %d, got %d", i, ack)
-			return err
-		}
-		fmt.Printf("Recieved %d, Got %d\n", i, ack)
+		time.Sleep(1 * time.Millisecond)
 	}
 
-	// 	go func(block uint16, data []byte, isLast bool) {
-	// 		defer wg.Done()
-	// 		sendTFTPDATAPacket(conn, s, blockNumber, dataToSend)
-
-	// 		recieveTFTPACKPacket(conn)
-
-	// 		mu.Lock()
-	// 		inFlight--
-	// 		windowNotFull.Signal()
-	// 		mu.Unlock()
-	// 	}(currentBlock, dataToSend, isLastChunk)
-	// 	time.Sleep(1 * time.Millisecond)
-	// 	if isLastChunk {
-	// 		break
-	// 	}
-	// }
-
-	// fmt.Println(imageBytes[:100])
-	// wg.Wait()
 	return nil
 }
 
@@ -202,4 +191,5 @@ func (s *Server) readLoop(conn net.Conn) {
 		return
 	}
 
+	time.Sleep(10 * time.Second)
 }

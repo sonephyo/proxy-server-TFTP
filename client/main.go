@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"time"
 )
 
 func saveImageToFile(imageBytes []byte, filename string) {
@@ -96,8 +97,6 @@ func ReadImagePacket(conn net.Conn) ([]byte, error) {
 	}
 
 	helper.ColorPrintln("green", "Finished receiving all data")
-	fmt.Printf("%v", blocks[0][:10])
-	fmt.Printf("%v", blocks[10][:10])
 
 	fullMessage := flattenByteArray(blocks)
 
@@ -126,7 +125,7 @@ func main() {
 
 	fmt.Println(len(fullMessage))
 	saveImageToFile(fullMessage, "test"+".jpg")
-
-	conn.Close()
-	// time.Sleep(100 * time.Second)
+	time.Sleep(10 * time.Second)
+	defer conn.Close()
+	
 }
