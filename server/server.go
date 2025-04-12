@@ -4,10 +4,12 @@ import (
 	// "assignment-2/helper"
 	"assignment-2/helper"
 	"bytes"
+	"encoding/binary"
 	"fmt"
 	"image"
 	"image/jpeg"
 	"log"
+	"math/rand/v2"
 	"net"
 	"net/http"
 	"time"
@@ -141,7 +143,7 @@ func getImageBytesBlocks(imageBytes []byte, blockSize int) [][]byte {
 	return blocks
 }
 
-func operateServerSideImage(conn net.Conn, imgURL string, s *Server) error {
+func operateServerSideImage(conn net.Conn, imgURL string, s *Server, key byte) error {
 
 	imageBytes := getImageFromURL(imgURL)
 
@@ -155,7 +157,8 @@ func operateServerSideImage(conn net.Conn, imgURL string, s *Server) error {
 		end := min(i+windowSize, len(imageBytesBlocks))
 
 		for j := i; j < end; j++ {
-			sendTFTPDATAPacket(conn, s, uint16(j), imageBytesBlocks[j])
+			encryptedBytes := xorEncryptDecrypt(imageBytesBlocks[j], key)
+			sendTFTPDATAPacket(conn, s, uint16(j), encryptedBytes)
 		}
 		ackCount := 0
 		deadline := time.Now().Add(timeOut)
@@ -184,6 +187,23 @@ func (s *Server) readLoop(conn net.Conn) {
 	defer conn.Close()
 	helper.ColorPrintln("green", "New client connected: "+conn.RemoteAddr().String())
 
+	clientID := make([]byte, 2048)
+	_, err := conn.Read(clientID)
+	if err != nil {
+		log.Fatal("Error: reading clientID", err)
+		return
+	}
+	clientIDByte := clientID[0]
+
+	sessionNum := rand.IntN(100)
+	lengthBuffer := make([]byte, 4)
+	binary.BigEndian.PutUint32(lengthBuffer, uint32(sessionNum))
+	conn.Write(lengthBuffer)
+
+	key := generateKey(clientIDByte, byte(sessionNum))
+
+	time.Sleep(1 * time.Millisecond)
+
 	buf := make([]byte, 2048)
 	n, err := conn.Read(buf)
 	if err != nil {
@@ -192,11 +212,23 @@ func (s *Server) readLoop(conn net.Conn) {
 	}
 
 	imgURL := string(buf[:n])
-	err = operateServerSideImage(conn, imgURL, s)
+	err = operateServerSideImage(conn, imgURL, s, key)
 	if err != nil {
 		helper.ColorPrintln("red", "Something went wrong: "+err.Error())
 		return
 	}
+	fmt.Println("Key is ", key)
+}
 
-	time.Sleep(10 * time.Second)
+// Helper functions
+func generateKey(clientID byte, sessionNum byte) byte {
+	return clientID ^ sessionNum
+}
+
+func xorEncryptDecrypt(data []byte, key byte) []byte {
+	enc := make([]byte, len(data))
+	for i := range data {
+		enc[i] = data[i] ^ key
+	}
+	return enc
 }

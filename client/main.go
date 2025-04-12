@@ -2,11 +2,14 @@ package main
 
 import (
 	"assignment-2/helper"
+	"encoding/binary"
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"net"
 	"os"
+	"time"
 )
 
 func saveImageToFile(imageBytes []byte, filename string) {
@@ -26,8 +29,10 @@ func saveImageToFile(imageBytes []byte, filename string) {
 }
 
 func sendImageURLTOServer(conn net.Conn, imgURL string) error {
+
 	_, err := conn.Write([]byte(imgURL))
 	if err != nil {
+		log.Fatal("Error: sending image to server: ", err)
 		return err
 	}
 	return nil
@@ -50,12 +55,9 @@ func flattenByteArray(arr [][]byte) []byte {
 	return flattened
 }
 
-func ReadImagePacket(conn net.Conn) ([]byte, error) {
-	// 516 bytes per TFTP DATA packet (opcode, block, data)
+func ReadImagePacket(conn net.Conn, key byte) ([]byte, error) {
 	chunk := make([]byte, 516)
 
-	// Map to hold the data for each block number.
-	// blocks := make(map[uint16][]byte)
 	var blocks [][]byte
 
 	for {
@@ -71,9 +73,10 @@ func ReadImagePacket(conn net.Conn) ([]byte, error) {
 			log.Fatal(err)
 			return nil, err
 		}
-		// time.Sleep(5 * time.Second)
 
-		blocks = helper.ReplaceInnerSlice(blocks, int(tftpData.Block), tftpData.Data)
+		decryptedData := xorEncryptDecrypt(tftpData.Data, key)
+
+		blocks = helper.ReplaceInnerSlice(blocks, int(tftpData.Block), decryptedData)
 
 		// Create and send ACK for the current block.
 		tftpAckPacketBytes, err := CreateTFTPACKPacket(tftpData.Block)
@@ -118,15 +121,56 @@ func main() {
 		return
 	}
 
+	clientID := *imgURL
+	_, err = conn.Write([]byte(clientID))
+	if err != nil {
+		fmt.Println("Write error:", err)
+		return
+	}
+	time.Sleep(1 * time.Millisecond)
+
+	sessionNumBytes := make([]byte, 4)
+	_, err = io.ReadFull(conn, sessionNumBytes)
+	if err != nil {
+		if err == io.EOF {
+			fmt.Println("Client closed Connection")
+			return
+		}
+		fmt.Println("Read full Error: ", err)
+		return
+	}
+	sessionNum := binary.BigEndian.Uint32(sessionNumBytes)
+
+	if sessionNum == 0 {
+		fmt.Println("Invalid chuckSize")
+		return
+	}
+
+	key := generateKey([]byte(clientID)[0], byte(sessionNum))
+	
+
 	sendImageURLTOServer(conn, *imgURL)
 
-	fullMessage, err := ReadImagePacket(conn)
+	fullMessage, err := ReadImagePacket(conn, key)
 	if err != nil {
 		return
 	}
 
 	fmt.Println(len(fullMessage))
 	saveImageToFile(fullMessage, "test"+".jpg")
-	// time.Sleep(10 * time.Second)
+	fmt.Println("Key is ", key)
 	defer conn.Close()
+}
+
+// Helper Functions
+func generateKey(clientID byte, sessionNum byte) byte{
+	return clientID ^ sessionNum
+}
+
+func xorEncryptDecrypt(data []byte, key byte) []byte {
+	enc := make([]byte, len(data))
+	for i := range data {
+		enc[i] = data[i] ^ key
+	}
+	return enc
 }
