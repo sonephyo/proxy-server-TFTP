@@ -180,6 +180,7 @@ func operateServerSideImage(conn net.Conn, imgURL string, s *Server) error {
 }
 
 func (s *Server) readLoop(conn net.Conn) {
+
 	defer conn.Close()
 	helper.ColorPrintln("green", "New client connected: "+conn.RemoteAddr().String())
 

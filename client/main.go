@@ -2,6 +2,7 @@ package main
 
 import (
 	"assignment-2/helper"
+	"flag"
 	"fmt"
 	"log"
 	"net"
@@ -106,7 +107,9 @@ func ReadImagePacket(conn net.Conn) ([]byte, error) {
 
 func main() {
 	hostAddress := "localhost:3000"
-	imgURL := "https://static.boredpanda.com/blog/wp-content/uploads/2020/07/funny-expressive-dog-corgi-genthecorgi-1-1-5f0ea719ea38a__700.jpg"
+
+	imgURL := flag.String("link", "https://static.boredpanda.com/blog/wp-content/uploads/2020/07/funny-expressive-dog-corgi-genthecorgi-1-1-5f0ea719ea38a__700.jpg", "a string")
+	flag.Parse()
 
 	// Creating connection with the server
 	conn, err := net.Dial("tcp", hostAddress)
@@ -115,7 +118,7 @@ func main() {
 		return
 	}
 
-	sendImageURLTOServer(conn, imgURL)
+	sendImageURLTOServer(conn, *imgURL)
 
 	fullMessage, err := ReadImagePacket(conn)
 	if err != nil {
@@ -126,5 +129,4 @@ func main() {
 	saveImageToFile(fullMessage, "test"+".jpg")
 	// time.Sleep(10 * time.Second)
 	defer conn.Close()
-
 }
