@@ -250,7 +250,7 @@ func (s *Server) readLoop(conn net.Conn) {
 		return
 	}
 	elapsed := time.Since(start)
-	helper.ColorPrintln("white", "Total Elapsed Time: "+fmt.Sprint(rune(elapsed.Milliseconds())))
+	helper.ColorPrintln("white", "Total Elapsed Time: "+fmt.Sprint(rune(elapsed.Milliseconds()))+ " ms")
 
 	helper.ColorPrintln("cyan", "Encryption Key: "+fmt.Sprint(key))
 	helper.ColorPrintln("yellow", "Bytes Sent: "+fmt.Sprint(len(imageBytes)))
