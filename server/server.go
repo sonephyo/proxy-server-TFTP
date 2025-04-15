@@ -78,7 +78,7 @@ func getImageFromURL(url string) []byte {
 	}
 
 	response, e := http.Get(url)
-	fmt.Println("Response Status code: ", response.StatusCode)
+	// fmt.Println("Response Status code: ", response.StatusCode)
 	if e != nil {
 		log.Fatal(e)
 	}
@@ -122,7 +122,6 @@ func recieveTFTPACKPacket(conn net.Conn) (uint16, error) {
 	if err != nil {
 		return 0, err
 	}
-	fmt.Println("Recieved Ack block number: ", tftpACKPacket.Block)
 	return tftpACKPacket.Block, nil
 }
 
@@ -147,7 +146,7 @@ func operateServerSideImage(conn net.Conn, imageBytes []byte, s *Server, key byt
 
 	imageBytesBlocks := getImageBytesBlocks(imageBytes, 512)
 
-	windowSize := 4
+	windowSize := 16
 	acks := make(map[int]bool)
 
 	// Timeout testing
@@ -202,7 +201,7 @@ func operateServerSideImage(conn net.Conn, imageBytes []byte, s *Server, key byt
 		if ackCount < (end - i) {
 			i -= windowSize
 			RTO *= 2 // For Exponential backoff
-			helper.ColorPrintln("yellow", "Time out detected. Preparing to resend packets")
+			// helper.ColorPrintln("yellow", "Time out detected. Preparing to resend packets")
 		}
 	}
 
@@ -249,11 +248,16 @@ func (s *Server) readLoop(conn net.Conn) {
 		helper.ColorPrintln("red", "Something went wrong: "+err.Error())
 		return
 	}
-	elapsed := time.Since(start)
-	helper.ColorPrintln("white", "Total Elapsed Time: "+fmt.Sprint(rune(elapsed.Milliseconds()))+ " ms")
 
-	helper.ColorPrintln("cyan", "Encryption Key: "+fmt.Sprint(key))
-	helper.ColorPrintln("yellow", "Bytes Sent: "+fmt.Sprint(len(imageBytes)))
+	elapsed := time.Since(start)
+	dataSizeMB := float64(len(imageBytes)) / (1024.0 * 1024.0)
+	elapsedSeconds := elapsed.Seconds()
+	throughput := dataSizeMB / elapsedSeconds
+	fmt.Printf("Transferred %.2f MB in %.2f seconds\n", dataSizeMB, elapsedSeconds)
+	fmt.Printf("Throughput: %.2f MB/s\n", throughput)
+	
+	// helper.ColorPrintln("cyan", "Encryption Key: "+fmt.Sprint(key))
+	// helper.ColorPrintln("yellow", "Bytes Sent: "+fmt.Sprint(len(imageBytes)))
 }
 
 // Helper functions
