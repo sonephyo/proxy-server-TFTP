@@ -104,7 +104,7 @@ func ReadImagePacket(conn net.Conn, key byte) ([]byte, error) {
 	fullMessage := flattenByteArray(blocks)
 
 	helper.ColorPrintln("green", fmt.Sprintf("Full message length: %v", len(fullMessage)))
-	// fmt.Println(fullMessage[:])
+
 	return fullMessage, nil
 }
 
@@ -114,7 +114,6 @@ func main() {
 	imgURL := flag.String("link", "https://static.boredpanda.com/blog/wp-content/uploads/2020/07/funny-expressive-dog-corgi-genthecorgi-1-1-5f0ea719ea38a__700.jpg", "a string")
 	flag.Parse()
 
-	// Creating connection with the server
 	conn, err := net.Dial("tcp", hostAddress)
 	if err != nil {
 		fmt.Println("Error: ", err)
