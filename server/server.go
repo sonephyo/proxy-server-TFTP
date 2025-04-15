@@ -240,11 +240,17 @@ func (s *Server) readLoop(conn net.Conn) {
 
 	imgURL := string(buf[:n])
 	imageBytes := getImageFromURL(imgURL)
+
+	// Measuring Throughput
+	start := time.Now()
+
 	err = operateServerSideImage(conn, imageBytes, s, key)
 	if err != nil {
 		helper.ColorPrintln("red", "Something went wrong: "+err.Error())
 		return
 	}
+	elapsed := time.Since(start)
+	helper.ColorPrintln("white", "Total Elapsed Time: "+fmt.Sprint(rune(elapsed.Milliseconds())))
 
 	helper.ColorPrintln("cyan", "Encryption Key: "+fmt.Sprint(key))
 	helper.ColorPrintln("yellow", "Bytes Sent: "+fmt.Sprint(len(imageBytes)))

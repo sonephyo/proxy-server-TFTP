@@ -35,7 +35,7 @@
 
 - [X] Use TCP-style **sliding windows**
 - [X] Implement TCP-style **Retransmission Timeout (RTO)** scheme.
-- [ ] Add command-line option to simulate **1% packet drop**.
+- [X] Add command-line option to simulate **1% packet drop**.
 
 ---
 

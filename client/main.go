@@ -54,7 +54,7 @@ func flattenByteArray(arr [][]byte) []byte {
 	return flattened
 }
 
-func ReadImagePacket(conn net.Conn, key byte, dropPercentage *float64) ([]byte, error) {
+func ReadImagePacket(conn net.Conn, key byte, dropBlocks map[uint16]bool) ([]byte, error) {
 	chunk := make([]byte, 516)
 
 	var blocks [][]byte
@@ -71,7 +71,8 @@ func ReadImagePacket(conn net.Conn, key byte, dropPercentage *float64) ([]byte, 
 			return nil, err
 		}
 
-		if rand.Float64() < *dropPercentage {
+		if dropBlocks[tftpData.Block] {
+			delete(dropBlocks, tftpData.Block)
 			helper.ColorPrintln("red", fmt.Sprintf("Simulating drop: NOT sending ACK for block %d", tftpData.Block))
 			decryptedData := xorEncryptDecrypt(tftpData.Data, key)
 			blocks = helper.ReplaceInnerSlice(blocks, int(tftpData.Block), decryptedData)
@@ -109,8 +110,20 @@ func main() {
 	hostAddress := "localhost:3000"
 
 	imgURL := flag.String("link", "https://static.boredpanda.com/blog/wp-content/uploads/2020/07/funny-expressive-dog-corgi-genthecorgi-1-1-5f0ea719ea38a__700.jpg", "a string")
-	dropPercentage := flag.Float64("drop", 0.0, "droprate (for ignoring some packets)")
+	// dropPercentage := flag.Float64("drop", 0.0, "droprate (for ignoring some packets)")
+
+	// For consistancy I will use specific drops
+	willDrop := flag.Bool("drop", false, "condition to check if we want to drop the package or not")
+
 	flag.Parse()
+
+	dropBlocks := map[uint16]bool{}
+	if *willDrop {
+		dropBlocks = map[uint16]bool{
+			25: true,
+			50: true,
+		}
+	}
 
 	conn, err := net.Dial("tcp", hostAddress)
 	if err != nil {
@@ -147,8 +160,9 @@ func main() {
 	key := generateKey([]byte(clientID)[0], byte(sessionNum))
 
 	sendImageURLTOServer(conn, *imgURL)
+	time.Sleep(1 * time.Second)
 
-	fullMessage, err := ReadImagePacket(conn, key, dropPercentage)
+	fullMessage, err := ReadImagePacket(conn, key, dropBlocks)
 	if err != nil {
 		return
 	}
