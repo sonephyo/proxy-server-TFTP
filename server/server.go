@@ -9,6 +9,7 @@ import (
 	"image"
 	"image/jpeg"
 	"log"
+	"math"
 	"math/rand/v2"
 	"net"
 	"net/http"
@@ -150,8 +151,16 @@ func operateServerSideImage(conn net.Conn, imgURL string, s *Server, key byte) e
 	imageBytesBlocks := getImageBytesBlocks(imageBytes, 512)
 
 	windowSize := 4
-	timeOut := time.Second * 2
 	acks := make(map[int]bool)
+
+	// Timeout testing
+	alpha, beta := 0.125, 0.25
+	G := 10 * time.Millisecond
+	K := 4.0
+	SRTT := time.Second
+	RTTVAR := SRTT / 2
+	RTO := SRTT + maxDuration(G, time.Duration(K)*RTTVAR)
+	sentTimePackets := make(map[int]time.Time)
 
 	for i := 0; i < len(imageBytesBlocks); i += windowSize {
 		end := min(i+windowSize, len(imageBytesBlocks))
@@ -159,23 +168,38 @@ func operateServerSideImage(conn net.Conn, imgURL string, s *Server, key byte) e
 		for j := i; j < end; j++ {
 			encryptedBytes := xorEncryptDecrypt(imageBytesBlocks[j], key)
 			sendTFTPDATAPacket(conn, s, uint16(j), encryptedBytes)
+			sentTimePackets[j] = time.Now()
 		}
 		ackCount := 0
-		deadline := time.Now().Add(timeOut)
+		deadlinetimeOut := time.Now().Add(RTO)
 
-		for ackCount < (end-i) && time.Now().Before(deadline) {
-			conn.SetReadDeadline(deadline)
+		for ackCount < (end-i) && time.Now().Before(deadlinetimeOut) {
+			conn.SetReadDeadline(deadlinetimeOut)
 			ack, err := recieveTFTPACKPacket(conn)
 			if err == nil {
 				if !acks[int(ack)] {
 					acks[int(ack)] = true
 					ackCount++
+
+					if timeSent, ok := sentTimePackets[int(ack)]; ok {
+						RTT := time.Since(timeSent)
+
+						RTTVAR = time.Duration((1 - beta)*float64(RTTVAR) + beta * math.Abs(float64(SRTT-RTT)))
+						SRTT = time.Duration((1-alpha) * float64(SRTT) + alpha*float64(RTT))
+						RTO = SRTT + maxDuration(G, time.Duration(K)* RTTVAR)
+						if RTO < time.Second {
+							RTO = time.Second
+						}
+
+						delete(sentTimePackets, int(ack))
+					}
 				}
 			}
 		}
 
 		if ackCount < (end - i) {
 			i -= windowSize
+			RTO *= 2 // For Exponential backoff
 		}
 	}
 
@@ -231,4 +255,11 @@ func xorEncryptDecrypt(data []byte, key byte) []byte {
 		enc[i] = data[i] ^ key
 	}
 	return enc
+}
+
+func maxDuration(a, b time.Duration) time.Duration {
+	if a > b {
+		return a
+	}
+	return b
 }
