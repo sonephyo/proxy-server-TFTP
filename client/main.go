@@ -7,13 +7,14 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/rand/v2"
 	"net"
 	"os"
 	"time"
 )
 
 func saveImageToFile(imageBytes []byte, filename string) {
-	file, err := os.Create(filename)
+	file, err := os.Create("/tmp/" + filename)
 	if err != nil {
 		log.Fatal("Error creating file: ", err)
 	}
@@ -146,7 +147,6 @@ func main() {
 	}
 
 	key := generateKey([]byte(clientID)[0], byte(sessionNum))
-	
 
 	sendImageURLTOServer(conn, *imgURL)
 
@@ -156,13 +156,13 @@ func main() {
 	}
 
 	fmt.Println(len(fullMessage))
-	saveImageToFile(fullMessage, "test"+".jpg")
+	saveImageToFile(fullMessage, "soney-"+fmt.Sprint(rand.IntN(1000))+".jpg")
 	fmt.Println("Key is ", key)
 	defer conn.Close()
 }
 
 // Helper Functions
-func generateKey(clientID byte, sessionNum byte) byte{
+func generateKey(clientID byte, sessionNum byte) byte {
 	return clientID ^ sessionNum
 }
 
