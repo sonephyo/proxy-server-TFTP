@@ -47,16 +47,14 @@ func flattenByteArray(arr [][]byte) []byte {
 
 	flattened := make([]byte, 0, totalLength)
 
-	for i, row := range arr {
-		fmt.Printf("--> This is row number %v data is %v\n", i, row[:5])
+	for _, row := range arr {
 		flattened = append(flattened, row...)
 	}
-	fmt.Printf("-----------> Data temp to check: %v", flattened[:10])
 
 	return flattened
 }
 
-func ReadImagePacket(conn net.Conn, key byte) ([]byte, error) {
+func ReadImagePacket(conn net.Conn, key byte, dropPercentage *float64) ([]byte, error) {
 	chunk := make([]byte, 516)
 
 	var blocks [][]byte
@@ -64,22 +62,25 @@ func ReadImagePacket(conn net.Conn, key byte) ([]byte, error) {
 	for {
 		n, err := conn.Read(chunk)
 		if err != nil {
-			log.Fatal(err)
 			return nil, err
 		}
 
-		// Deserialize the received TFTP DATA packet.
 		tftpData, err := DeserializeTFTPDATA(chunk[:n])
 		if err != nil {
 			log.Fatal(err)
 			return nil, err
 		}
 
+		if rand.Float64() < *dropPercentage {
+			helper.ColorPrintln("red", fmt.Sprintf("Simulating drop: NOT sending ACK for block %d", tftpData.Block))
+			decryptedData := xorEncryptDecrypt(tftpData.Data, key)
+			blocks = helper.ReplaceInnerSlice(blocks, int(tftpData.Block), decryptedData)
+			continue
+		}
 		decryptedData := xorEncryptDecrypt(tftpData.Data, key)
 
 		blocks = helper.ReplaceInnerSlice(blocks, int(tftpData.Block), decryptedData)
 
-		// Create and send ACK for the current block.
 		tftpAckPacketBytes, err := CreateTFTPACKPacket(tftpData.Block)
 		if err != nil {
 			log.Fatal(err)
@@ -92,10 +93,8 @@ func ReadImagePacket(conn net.Conn, key byte) ([]byte, error) {
 			return nil, err
 		}
 		fmt.Printf("Sent ACK for block %d\n", tftpData.Block)
-		helper.ColorPrintln("cyan", "The value of n is "+fmt.Sprint(n))
 
-		// Per TFTP, the final data packet is less than the full packet size.
-		if n != 516 {
+		if len(tftpData.Data) < 512 {
 			break
 		}
 	}
@@ -103,9 +102,6 @@ func ReadImagePacket(conn net.Conn, key byte) ([]byte, error) {
 	helper.ColorPrintln("green", "Finished receiving all data")
 
 	fullMessage := flattenByteArray(blocks)
-
-	helper.ColorPrintln("green", fmt.Sprintf("Full message length: %v", len(fullMessage)))
-
 	return fullMessage, nil
 }
 
@@ -113,6 +109,7 @@ func main() {
 	hostAddress := "localhost:3000"
 
 	imgURL := flag.String("link", "https://static.boredpanda.com/blog/wp-content/uploads/2020/07/funny-expressive-dog-corgi-genthecorgi-1-1-5f0ea719ea38a__700.jpg", "a string")
+	dropPercentage := flag.Float64("drop", 0.0, "droprate (for ignoring some packets)")
 	flag.Parse()
 
 	conn, err := net.Dial("tcp", hostAddress)
@@ -130,6 +127,7 @@ func main() {
 	time.Sleep(1 * time.Millisecond)
 
 	sessionNumBytes := make([]byte, 4)
+
 	_, err = io.ReadFull(conn, sessionNumBytes)
 	if err != nil {
 		if err == io.EOF {
@@ -150,14 +148,14 @@ func main() {
 
 	sendImageURLTOServer(conn, *imgURL)
 
-	fullMessage, err := ReadImagePacket(conn, key)
+	fullMessage, err := ReadImagePacket(conn, key, dropPercentage)
 	if err != nil {
 		return
 	}
 
-	fmt.Println(len(fullMessage))
 	saveImageToFile(fullMessage, "soney-"+fmt.Sprint(rand.IntN(1000))+".jpg")
-	fmt.Println("Key is ", key)
+	helper.ColorPrintln("cyan", "Encryption Key: "+fmt.Sprint(key))
+	helper.ColorPrintln("yellow", "Bytes Recieved: "+fmt.Sprint(len(fullMessage)))
 	defer conn.Close()
 }
 

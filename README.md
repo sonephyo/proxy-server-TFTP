@@ -41,8 +41,8 @@
 
 ## 🧪 File Handling and Validation
 
-- [ ] Received files should be stored in a **temporary directory** (e.g., `/tmp`).
-- [ ] Validate file content with `cmp` or byte comparison.
+- [X] Received files should be stored in a **temporary directory** (e.g., `/tmp`).
+- [X] Validate file content with `cmp` or byte comparison.
 
 ---
 

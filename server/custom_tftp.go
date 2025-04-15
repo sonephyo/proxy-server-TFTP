@@ -18,7 +18,6 @@ func CreateTFTPRRQPacket() ([]byte, error) {
 		return nil, err
 	}
 
-	fmt.Printf("Data Length: %v\n", len(data))
 	return data, nil
 }
 
@@ -35,6 +34,5 @@ func CreateTFTPDATAPacket(blockNumber uint16, selectedBytes []byte) ([]byte, err
 		return nil, err
 	}
 
-	fmt.Printf("Data Length: %v\n", len(data))
 	return data, nil
 }

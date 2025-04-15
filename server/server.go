@@ -115,7 +115,6 @@ func recieveTFTPACKPacket(conn net.Conn) (uint16, error) {
 	buf := make([]byte, 4)
 	n, err := conn.Read(buf)
 	if err != nil {
-		log.Fatal(err.Error())
 		return 0, err
 	}
 
@@ -144,9 +143,7 @@ func getImageBytesBlocks(imageBytes []byte, blockSize int) [][]byte {
 	return blocks
 }
 
-func operateServerSideImage(conn net.Conn, imgURL string, s *Server, key byte) error {
-
-	imageBytes := getImageFromURL(imgURL)
+func operateServerSideImage(conn net.Conn, imageBytes []byte, s *Server, key byte) error {
 
 	imageBytesBlocks := getImageBytesBlocks(imageBytes, 512)
 
@@ -171,6 +168,11 @@ func operateServerSideImage(conn net.Conn, imgURL string, s *Server, key byte) e
 			sentTimePackets[j] = time.Now()
 		}
 		ackCount := 0
+		for j := i; j < end; j++ {
+			if acks[j] {
+				ackCount++
+			}
+		}
 		deadlinetimeOut := time.Now().Add(RTO)
 
 		for ackCount < (end-i) && time.Now().Before(deadlinetimeOut) {
@@ -184,9 +186,9 @@ func operateServerSideImage(conn net.Conn, imgURL string, s *Server, key byte) e
 					if timeSent, ok := sentTimePackets[int(ack)]; ok {
 						RTT := time.Since(timeSent)
 
-						RTTVAR = time.Duration((1 - beta)*float64(RTTVAR) + beta * math.Abs(float64(SRTT-RTT)))
-						SRTT = time.Duration((1-alpha) * float64(SRTT) + alpha*float64(RTT))
-						RTO = SRTT + maxDuration(G, time.Duration(K)* RTTVAR)
+						RTTVAR = time.Duration((1-beta)*float64(RTTVAR) + beta*math.Abs(float64(SRTT-RTT)))
+						SRTT = time.Duration((1-alpha)*float64(SRTT) + alpha*float64(RTT))
+						RTO = SRTT + maxDuration(G, time.Duration(K)*RTTVAR)
 						if RTO < time.Second {
 							RTO = time.Second
 						}
@@ -200,6 +202,7 @@ func operateServerSideImage(conn net.Conn, imgURL string, s *Server, key byte) e
 		if ackCount < (end - i) {
 			i -= windowSize
 			RTO *= 2 // For Exponential backoff
+			helper.ColorPrintln("yellow", "Time out detected. Preparing to resend packets")
 		}
 	}
 
@@ -236,12 +239,15 @@ func (s *Server) readLoop(conn net.Conn) {
 	}
 
 	imgURL := string(buf[:n])
-	err = operateServerSideImage(conn, imgURL, s, key)
+	imageBytes := getImageFromURL(imgURL)
+	err = operateServerSideImage(conn, imageBytes, s, key)
 	if err != nil {
 		helper.ColorPrintln("red", "Something went wrong: "+err.Error())
 		return
 	}
-	fmt.Println("Key is ", key)
+
+	helper.ColorPrintln("cyan", "Encryption Key: "+fmt.Sprint(key))
+	helper.ColorPrintln("yellow", "Bytes Sent: "+fmt.Sprint(len(imageBytes)))
 }
 
 // Helper functions
